@@ -1,9 +1,9 @@
 # dataset files
-./dataset/formula_images/
-./dataset/im2latex_test.lst
-./dataset/im2latex_train.lst
-./dataset/im2latex_validate.lst
-./dataset/im2latex_formulas.lst
+dataset/formula_images/
+dataset/im2latex_test.lst
+dataset/im2latex_train.lst
+dataset/im2latex_validate.lst
+dataset/im2latex_formulas.lst
 
 # Ide files
-./.idea/
+.idea/
