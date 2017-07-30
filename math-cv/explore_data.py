@@ -21,7 +21,7 @@ def cropped_image_sizes():
     width = []
     height = []
     for image_file in os.listdir('dataset/formula_images/'):
-        if image_file == '.DS_Store':
+        if not image_file.endswith(".png"):
             continue
         original_image = np.asarray(misc.imread("dataset/formula_images/" + image_file, True))
         cropped_image = crop_image(original_image)
@@ -30,7 +30,6 @@ def cropped_image_sizes():
             height.append(cropped_image[1])
 
     return width, height
-
 
 
 def plot_histograms(datasets):
@@ -43,7 +42,7 @@ def plot_histograms(datasets):
 
 if __name__ == '__main__':
     histogram_datasets = []
-    histogram_datasets.append((tokenized_formula_lengths(),'formula_lengths'))
+    histogram_datasets.append((tokenized_formula_lengths(), 'formula_lengths'))
     images_sizes = cropped_image_sizes()
     histogram_datasets.append((images_sizes[0], 'image_heights'))
     histogram_datasets.append((images_sizes[1], 'image_widths'))

@@ -1,5 +1,6 @@
 # dataset files
 dataset/formula_images/
+dataset/target/
 dataset/im2latex_test.lst
 dataset/im2latex_train.lst
 dataset/im2latex_validate.lst
