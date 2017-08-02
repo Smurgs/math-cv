@@ -8,3 +8,6 @@ dataset/im2latex_formulas.lst
 
 # Ide files
 .idea/
+
+# Log files
+*log.txt

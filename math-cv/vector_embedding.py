@@ -56,11 +56,12 @@ def main(args):
 
     # Load data
     logging.info('Loading data...')
-    tokenized_formulas = open(label_path).readlines()
+    tokenized_formulas = [x[:-1] for x in open(label_path).readlines()]
     padded_formulas = []
-    for _, formula_index in open(data_path).readlines():
-        tokens = tokenized_formulas[formula_index-1].split()
-        padded_formulas.append(tokens + (200-len(tokens)) * "\\<eos>")
+    for _, formula_index in [x[:-1].split() for x in open(data_path).readlines()]:
+        tokens = tokenized_formulas[int(formula_index)-1].split()
+        padding = (200-len(tokens)) * "\\<eos> "
+        padded_formulas.append(tokens + padding.split())
 
     # Build vocabulary
     logging.info('Building vocabulary...')
@@ -69,6 +70,18 @@ def main(args):
     dictionary = dict()
     for word, _ in counts:
         dictionary[word] = len(dictionary)
+
+    # Transform labels
+    logging.info('Transforming labels...')
+    transformed_labels = []
+    for padded_formula in padded_formulas:
+        transformed_label = []
+        for token in padded_formula:
+            if token in dictionary:
+                transformed_label.append(dictionary[token])
+            else:
+                logging.warning('Failed to find token "' + token + '" in dictionary')
+        transformed_labels.append(transformed_label)
 
 if __name__ == '__main__':
     main(sys.argv[1:])
