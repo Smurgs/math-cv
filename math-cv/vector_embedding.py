@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import pickle
 import logging
 import argparse
@@ -7,6 +8,9 @@ import itertools
 import collections
 
 import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+from sklearn.manifold import TSNE
 
 
 def process_args(args):
@@ -61,7 +65,7 @@ def load_data(label_path, data_path):
     padded_formulas = []
     for _, formula_index in [x[:-1].split() for x in open(data_path).readlines()]:
         tokens = tokenized_formulas[int(formula_index) - 1].split()
-        padding = (200 - len(tokens)) * "\\<eos> "
+        padding = (label_length - len(tokens)) * "\\<eos> "
         padded_formulas.append(tokens + padding.split())
     return padded_formulas
 
@@ -91,12 +95,10 @@ def transform_labels(padded_formulas, dictionary):
 
 
 def generate_batch(label):
-    assert len(label) == 200
-    skip_window = 1
+    assert len(label) == label_length
     index = 0
     target = skip_window
     span = 2 * skip_window + 1
-    batch_size = skip_window * 2 * (len(label) - skip_window * 2)
     data = np.ndarray(shape=(batch_size), dtype=np.int32)
     labels = np.ndarray(shape=(batch_size, 1), dtype=np.int32)
     buffer = collections.deque(maxlen=span)
@@ -116,6 +118,34 @@ def generate_batch(label):
     return data, labels
 
 
+def plot_with_labels(low_dim_embs, labels, filename='tsne.png'):
+  assert low_dim_embs.shape[0] >= len(labels), 'More labels than embeddings'
+  plt.figure(figsize=(18, 18))  # in inches
+  for i, label in enumerate(labels):
+    x, y = low_dim_embs[i, :]
+    plt.scatter(x, y)
+    plt.annotate(label,
+                 xy=(x, y),
+                 xytext=(5, 2),
+                 textcoords='offset points',
+                 ha='right',
+                 va='bottom')
+
+  plt.savefig(filename)
+
+
+# Hyper parameters
+num_steps = 1000
+valid_size = 16
+valid_window = 100
+skip_window = 1
+num_sampled = 64
+label_length = 200
+embedding_size = 128
+batch_size = skip_window * 2 * (label_length - skip_window * 2)
+valid_examples = np.random.choice(valid_window, valid_size, replace=False)
+
+
 def main(args):
     parameters = process_args(args)
     setup_logging(parameters.log_path)
@@ -131,6 +161,8 @@ def main(args):
     # Build vocabulary
     logging.info('Building vocabulary...')
     dictionary = build_dictionary(padded_formulas)
+    reverse_dictionary = dict(zip(dictionary.values(), dictionary.keys()))
+    vocabulary_size = len(dictionary)
     if not os.path.exists('target'):
         os.makedirs('target')
     with open(parameters.mapper_path, 'wb') as m:
@@ -140,13 +172,84 @@ def main(args):
     logging.info('Transforming labels...')
     transformed_labels = transform_labels(padded_formulas, dictionary)
 
-    logging.info('Sample batch...')
-    batch_data, batch_labels = generate_batch(transformed_labels[0])
-    print transformed_labels[0]
-    print batch_data[:10]
-    print "-----"
-    print batch_labels[:10]
+    # Build graph
+    logging.info('Building graph...')
+    graph = tf.Graph()
+    with graph.as_default():
+        train_inputs = tf.placeholder(tf.int32, shape=[batch_size])
+        train_labels = tf.placeholder(tf.int32, shape=[batch_size, 1])
+        valid_dataset = tf.constant(valid_examples, dtype=tf.int32)
 
+        with tf.device('/cpu:0'):
+            embeddings = tf.Variable(
+                tf.random_uniform([vocabulary_size, embedding_size], -1.0, 1.0))
+            embed = tf.nn.embedding_lookup(embeddings, train_inputs)
+
+            nce_weights = tf.Variable(
+                tf.truncated_normal([vocabulary_size, embedding_size],
+                                    stddev=1.0 / math.sqrt(embedding_size)))
+            nce_biases = tf.Variable(tf.zeros([vocabulary_size]))
+
+        loss = tf.reduce_mean(
+            tf.nn.nce_loss(weights=nce_weights,
+                           biases=nce_biases,
+                           labels=train_labels,
+                           inputs=embed,
+                           num_sampled=num_sampled,
+                           num_classes=vocabulary_size))
+
+        optimizer = tf.train.GradientDescentOptimizer(1.0).minimize(loss)
+        norm = tf.sqrt(tf.reduce_sum(tf.square(embeddings), 1, keep_dims=True))
+        normalized_embeddings = embeddings / norm
+        valid_embeddings = tf.nn.embedding_lookup(
+            normalized_embeddings, valid_dataset)
+        similarity = tf.matmul(
+            valid_embeddings, normalized_embeddings, transpose_b=True)
+        init = tf.global_variables_initializer()
+
+    with tf.Session(graph=graph) as session:
+        # We must initialize all variables before we use them.
+        init.run()
+        print('Initialized')
+
+        average_loss = 0
+        for step in xrange(num_steps):
+            batch_inputs, batch_labels = generate_batch(transformed_labels[step])
+            feed_dict = {train_inputs: batch_inputs, train_labels: batch_labels}
+
+            # We perform one update step by evaluating the optimizer op (including it
+            # in the list of returned values for session.run()
+            _, loss_val = session.run([optimizer, loss], feed_dict=feed_dict)
+            average_loss += loss_val
+
+            if step % 100 == 0:
+                if step > 0:
+                    average_loss /= 100
+                # The average loss is an estimate of the loss over the last 100 batches.
+                print('Average loss at step ', step, ': ', average_loss)
+                average_loss = 0
+
+            # Note that this is expensive (~20% slowdown if computed every 500 steps)
+            if step % 10000 == 0:
+                sim = similarity.eval()
+                for i in xrange(valid_size):
+                    valid_word = reverse_dictionary[valid_examples[i]]
+                    top_k = 8  # number of nearest neighbors
+                    nearest = (-sim[i, :]).argsort()[1:top_k + 1]
+                    log_str = 'Nearest to %s:' % valid_word
+                    for k in xrange(top_k):
+                        close_word = reverse_dictionary[nearest[k]]
+                        log_str = '%s %s,' % (log_str, close_word)
+                    print(log_str)
+        final_embeddings = normalized_embeddings.eval()
+
+    tsne = TSNE(perplexity=30, n_components=2, init='pca', n_iter=5000)
+    plot_only = 500
+    low_dim_embs = tsne.fit_transform(final_embeddings[:plot_only, :])
+    labels = [reverse_dictionary[i] for i in xrange(plot_only)]
+    plot_with_labels(low_dim_embs, labels)
+
+    print 'All done!'
 
 if __name__ == '__main__':
     main(sys.argv[1:])

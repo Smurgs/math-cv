@@ -85,13 +85,14 @@ def main(args):
                     w = im_size[0]
                     h = im_size[1]
                     if w <= parameters.max_width and h <= parameters.max_height:
-                        label = labels[int(line_idx)]
+                        label = labels[int(line_idx)-1]
                         if len(label.strip()) == 0:
                             logging.info('%s discarded due to cannot-be-parsed formula!'%os.path.basename(img_path))
                             num_discard += 1
                             continue
                         if len(label.strip().split()) > parameters.max_tokens:
                             logging.info('%s discarded due to too many tokens!'%os.path.basename(img_path))
+                            num_discard += 1
                             continue
                         fout.write('%s %s\n'%(os.path.basename(img_path),line_idx))
                     else:
