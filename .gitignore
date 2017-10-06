@@ -14,3 +14,5 @@ math-cv/target/
 
 # Log files
 *log.txt
+
+*.pyc
