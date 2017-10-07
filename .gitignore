@@ -1,12 +1,7 @@
 # dataset files
-dataset/formula_images/
-dataset/target/
-dataset/im2latex_test.lst
-dataset/im2latex_train.lst
-dataset/im2latex_validate.lst
-dataset/im2latex_formulas.lst
+dataset/*
 
-# model generated files
+# generated files
 math-cv/mathcv/target/*
 
 # Ide files
