@@ -7,7 +7,7 @@ dataset/im2latex_validate.lst
 dataset/im2latex_formulas.lst
 
 # model generated files
-math-cv/target/
+math-cv/mathcv/target/*
 
 # Ide files
 .idea/

@@ -3,9 +3,11 @@ import time
 import numpy as np
 import tensorflow as tf
 
-from mathcv.model import Model
+import mathcv.model
+import mathcv.preprocess
+import mathcv.data_handler
+
 from mathcv.config import config
-from mathcv.data_loader import DataLoader
 
 FLAGS = tf.app.flags.FLAGS
 tf.app.flags.DEFINE_integer('vocab_size', 563, 'vocabulary size')
@@ -14,66 +16,25 @@ tf.app.flags.DEFINE_integer('decoder_memory_dim', 512, 'decoder lstm memory size
 tf.app.flags.DEFINE_float('dropout_prob', 0.75, 'dropout probability')
 
 
-
-#
-#     print "Training"
-#     for i in range(epochs):
-#         if reduce_lr == 5:
-#             lr = max(min_lr, lr - 0.005)
-#             reduce_lr = 0
-#         print "Epoch %d learning rate %.4f" % (i, lr)
-#         epoch_start_time = time.time()
-#         batch_50_start = epoch_start_time
-#         for j in range(len(train)):
-#             images, labels = train[j]
-#
-#             print "Starting batch #: " + str(j)
-#             train_step.run(feed_dict={learning_rate: lr, data_input: images, true_labels: labels})
-#             print "Batch accuracy: " + str(accuracy.eval(feed_dict={data_input: images, true_labels: labels}))
-#         print "Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60)
-#         print "Running on Validation Set"
-#         accs = []
-#         for j in range(len(val)):
-#             images, labels = val[j]
-#             val_accuracy = accuracy.eval(feed_dict={data_input: images,
-#                                                     true_labels: labels})
-#             accs.append(val_accuracy)
-#         val_acc = sess.run(tf.reduce_mean(accs))
-#         if (val_acc - last_val_acc) >= .01:
-#             reduce_lr = 0
-#         else:
-#             reduce_lr = reduce_lr + 1
-#         last_val_acc = val_acc
-#         print("val accuracy %g" % val_acc)
-#
 #     print 'Saving model'
 #     saver = tf.train.Saver()
 #     id = 'model-' + time.strftime("%d-%m-%Y--%H-%M")
 #     os.mkdir(id)
 #     save_path = saver.save(sess, id + '/model')
-#     print 'Running on Test Set'
-#     accs = []
-#     for j in range(len(test)):
-#         images, labels = test[j]
-#         test_accuracy = accuracy.eval(feed_dict={data_input: images,
-#                                                  true_labels: labels})
-#         accs.append(test_accuracy)
-#     test_acc = sess.run(tf.reduce_mean(accs))
-#     print("test accuracy %g" % test_acc)
 
 
 def main(argv):
     print 'Starting mathcv'
-    train_model()
+    preprocess()
 
 
 def preprocess():
-    pass
+    mathcv.preprocess.preprocess_dataset()
 
 
 def train_model():
     print ('Loading data')
-    data_loader = DataLoader()
+    data_loader = mathcv.data_handler.DataLoader()
 
     print ('Building model')
     image_input = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1])
@@ -85,7 +46,7 @@ def train_model():
         'dropout_prob': FLAGS.dropout_prob,
         'learning_rate': FLAGS.learning_rate
     }
-    model = Model(image_input, label_input, hp)
+    model = mathcv.model.Model(image_input, label_input, hp)
 
     epochs = 1
 
