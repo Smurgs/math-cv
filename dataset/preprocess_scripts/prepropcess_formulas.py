@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# tokenize latex formulas
 import sys, os, argparse, logging, subprocess, shutil
 
 def is_ascii(str):
@@ -9,31 +7,12 @@ def is_ascii(str):
     except UnicodeError:
         return False
 
-def process_args(args):
-    parser = argparse.ArgumentParser(description='Preprocess (tokenize or normalize) latex formulas')
 
-    parser.add_argument('--mode', dest='mode',
-                        choices=['tokenize', 'normalize'], required=True,
-                        help=('Tokenize (split to tokens seperated by space) or normalize (further translate to an equivalent standard form).'
-                        ))
-    parser.add_argument('--input-file', dest='input_file',
-                        type=str, required=True,
-                        help=('Input file containing latex formulas. One formula per line.'
-                        ))
-    parser.add_argument('--output-file', dest='output_file',
-                        type=str, required=True,
-                        help=('Output file.'
-                        ))
-    parser.add_argument('--num-threads', dest='num_threads',
-                        type=int, default=4,
-                        help=('Number of threads, default=4.'
-                        ))
-    parser.add_argument('--log-path', dest="log_path",
-                        type=str, default='log.txt',
-                        help=('Log file path, default=log.txt' 
-                        ))
-    parameters = parser.parse_args(args)
-    return parameters
+mode = 'tokenize' or 'normalize'
+num_threads = 4
+input_file
+output_file
+log_path
 
 def main(args):
     parameters = process_args(args)
@@ -47,7 +26,6 @@ def main(args):
     formatter = logging.Formatter('%(asctime)-15s %(name)-5s %(levelname)-8s %(message)s')
     console.setFormatter(formatter)
     logging.getLogger('').addHandler(console)
-
     logging.info('Script being executed: %s'%__file__)
 
     input_file = parameters.input_file
@@ -82,7 +60,3 @@ def main(args):
                         tokens_out.append(token)
                 fout.write(' '.join(tokens_out)+'\n')
     os.remove(temp_file)
-
-if __name__ == '__main__':
-    main(sys.argv[1:])
-    logging.info('Jobs finished')
