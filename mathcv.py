@@ -22,7 +22,7 @@ tf.app.flags.DEFINE_float('dropout_prob', 0.75, 'dropout probability')
 
 
 def main(argv):
-    print ('MathCv v0.0.1')
+    print ('MathCv v0.1.0')
     if len(argv) <= 1:
         print_usage()
     elif argv[1] == 'download':
@@ -77,18 +77,17 @@ def train_model():
     }
     model = mathcv.model.Model(image_input, label_input, hp)
 
-    epochs = 1
 
     print ('Starting session')
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
-        tf.summary.FileWriter("log", sess.graph)
+        tf.summary.FileWriter("mathcv/target/model_summaries", sess.graph)
 
         print ('Starting training')
-        for epoch in range(epochs):
+        for epoch in range(config['epochs']):
             print ("Starting epoch " + str(epoch + 1))
             epoch_start_time = time.time()
-            for batch in data_loader.get_train_batches():
+            for batch in data_loader.get_train_batches()[:5]:
                 images, labels = batch
                 _, acc = sess.run([model.optimize, model.accuracy], feed_dict={image_input: images, label_input: labels})
                 print ('Batch accuracy: ' + str(acc))

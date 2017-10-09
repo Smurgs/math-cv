@@ -31,9 +31,16 @@ class DataLoader:
         val = open(config['val_path']).read().split('\n')[:-1]
         test = open(config['test_path']).read().split('\n')[:-1]
 
-        train = self.combine_x_and_y(train[:10], formulas)
-        val = self.combine_x_and_y(val[:10], formulas)
-        test = self.combine_x_and_y(test[:10], formulas)
+        if config['train_limit'] is not None:
+            train = train[:config['train_limit']]
+        if config['val_limit'] is not None:
+            val = val[:config['val_limit']]
+        if config['test_limit'] is not None:
+            test = test[:config['test_limit']]
+
+        train = self.combine_x_and_y(train, formulas)
+        val = self.combine_x_and_y(val, formulas)
+        test = self.combine_x_and_y(test, formulas)
 
         self._train = self.batchify(train)
         self._val = self.batchify(val)

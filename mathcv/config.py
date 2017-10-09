@@ -25,5 +25,10 @@ config = {
     'padding_size': '[8,8,8,8]',
     'label_length': 202,
     'num_thread_preprocess': 4,
-    'batch_size': 2
+
+    'batch_size': 50,
+    'epochs': 1,
+    'train_limit': None,
+    'val_limit': None,
+    'test_limit': None
 }
