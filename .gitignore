@@ -1,14 +1,13 @@
-# dataset files
+# Dataset files
 dataset/*
+dataset
 
-# generated files
-math-cv/mathcv/target/*
-math-cv/mathcv/target
+# Generated files
+mathcv/target/*
+mathcv/target
 
 # Ide files
 .idea/
 
-# Log files
-*log.txt
-
+# Python byte code
 *.pyc
