@@ -20,7 +20,10 @@ config = {
 
     'image_height': 125,
     'image_width': 625,
+    'downsample_ratio': 2.0,
+    'image_postfix': '.png',
+    'padding_size': '[8,8,8,8]',
     'label_length': 202,
-
+    'num_thread_preprocess': 4,
     'batch_size': 2
 }

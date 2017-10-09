@@ -3,6 +3,7 @@ dataset/*
 
 # generated files
 math-cv/mathcv/target/*
+math-cv/mathcv/target
 
 # Ide files
 .idea/
