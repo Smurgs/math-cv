@@ -91,7 +91,7 @@ def train_model():
                 images, labels = batch
                 _, acc = sess.run([model.optimize, model.accuracy], feed_dict={image_input: images, label_input: labels})
                 print ('Batch accuracy: ' + str(acc))
-            print "Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60)
+            print ("Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60))
 
         print ('Running on validation set')
         accs = []

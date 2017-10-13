@@ -24,11 +24,11 @@ config = {
     'image_postfix': '.png',
     'padding_size': '[8,8,8,8]',
     'label_length': 202,
-    'num_thread_preprocess': 4,
+    'num_thread_preprocess': 10,
 
-    'batch_size': 50,
+    'batch_size': 2,
     'epochs': 1,
-    'train_limit': None,
-    'val_limit': None,
-    'test_limit': None
+    'train_limit': 10,
+    'val_limit': 10,
+    'test_limit': 10
 }

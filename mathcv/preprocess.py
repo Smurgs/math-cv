@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from multiprocessing.dummy import Pool as ThreadPool
 
-from config import config
+from mathcv.config import config
 
 
 def preprocess_dataset():
@@ -56,7 +56,7 @@ def filter_records():
                         w = im_size[0]
                         h = im_size[1]
                         if w <= config['image_width'] and h <= config['image_height']:
-                            label = labels[int(line_idx) - 1]
+                            label = labels[int(line_idx)]
                             if len(label.strip()) == 0:
                                 num_discard += 1
                                 continue
@@ -82,10 +82,11 @@ def preprocess_formulas():
         exit(1)
 
     temp_file = output_file + '.tmp'
-    with open(temp_file, 'w+') as fout:
-        with open(output_file) as fin:
-            for line in fin:
-                fout.write(line.replace('\r', ' ').strip() + '\n')  # delete \r
+    with open(temp_file, 'wb') as fout:
+        f =  open(output_file, 'rb').read()
+        f = f.split(b'\n')
+        for line in f:
+            fout.write(line.replace(b'\r', b' ').strip() + b'\n')  # delete \r
 
     js_script_path = os.path.join(config['root_dir'], 'mathcv/preprocess_latex.js')
     cmd = "cat %s | node %s %s > %s " % (temp_file, js_script_path, 'normalize', output_file)
@@ -97,15 +98,16 @@ def preprocess_formulas():
 
     temp_file = output_file + '.tmp'
     shutil.move(output_file, temp_file)
-    with open(temp_file) as fin:
-        with open(output_file, 'w') as fout:
-            for line in fin:
-                tokens = line.strip().split()
-                tokens_out = []
-                for token in tokens:
-                    if is_ascii(token):
-                        tokens_out.append(token)
-                fout.write(' '.join(tokens_out) + '\n')
+    fin = open(temp_file, 'rb').read()
+    fin = fin.split(b'\n')
+    with open(output_file, 'w') as fout:
+        for line in fin:
+            tokens = line.strip().split()
+            tokens_out = []
+            for token in tokens:
+                if is_ascii(token):
+                    tokens_out.append(token.decode('ascii'))
+            fout.write(' '.join(tokens_out) + '\n')
     os.remove(temp_file)
 
     dictionary = dict()

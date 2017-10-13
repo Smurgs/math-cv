@@ -11,3 +11,6 @@ mathcv/target
 
 # Python byte code
 *.pyc
+
+*.sh
+*.out
