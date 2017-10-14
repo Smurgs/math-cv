@@ -30,5 +30,8 @@ config = {
     'epochs': 1,
     'train_limit': 10,
     'val_limit': 10,
-    'test_limit': 10
+    'test_limit': 10,
+    'dropout_prob': 0.75,
+    'decoder_memory_dim': 512,
+    'learning_rate': 0.1
 }
