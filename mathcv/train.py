@@ -38,16 +38,20 @@ def train():
     label_input2 = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
 
     opt = tf.train.AdadeltaOptimizer(config['learning_rate'])
-    with tf.device('/gpu:0'):
-        model = mathcv.model.Model(image_input, label_input, data_loader.get_vocab_size())
-        grad1 = opt.compute_gradients(model.loss)
-    with tf.device('/gpu:1'):
-        model2 = mathcv.model.Model(image_input2, label_input2, data_loader.get_vocab_size())
-        grad2 = opt.compute_gradients(model2.loss)
+    with tf.name_scope('model1') as scope:
+        with tf.device('/gpu:0'):
+            model = mathcv.model.Model(image_input, label_input, data_loader.get_vocab_size())
+            grad1 = opt.compute_gradients(model.loss)
+    with tf.name_scope('model2') as scope:
+        with tf.device('/gpu:1'):
+            with tf.variable_scope(tf.get_variable_scope(), reuse=True):
+                model2 = mathcv.model.Model(image_input2, label_input2, data_loader.get_vocab_size())
+                grad2 = opt.compute_gradients(model2.loss)
     with tf.device('/cpu:0'):
-        print ([grad1, grad2])
         grads = average_gradients([grad1, grad2])
         apply_grad_op = opt.apply_gradients(grads)
+
+    print (tf.get_collection(tf.GraphKeys.LOSSES))
 
     print ('Starting session')
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:

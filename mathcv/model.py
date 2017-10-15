@@ -25,11 +25,9 @@ class Model:
         self.images = images
         self.labels = labels
         self.vocab_size = vocab_size
-        with tf.name_scope('model%d' % Model.model_count) as scope:
-            self.prediction
-            self.loss
-            self.accuracy
-            tf.get_variable_scope().reuse_variables()
+        self.prediction
+        self.loss
+        self.accuracy
 
     @lazy_property
     def prediction(self):
@@ -41,38 +39,39 @@ class Model:
         conv5 = self.build_convolution_layer(conv4, [5, 5, 256, 384], 1, 'conv_layer_5')
 
         # Encoder - Fully connected layer
-        with tf.name_scope('encoder') as scope:
-            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), config['label_length'], scope='shared/encoder/fcl')
+        with tf.variable_scope('encoder') as scope:
+            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), config['label_length'], scope='fcl')
 
         # Decoder
-        with tf.name_scope('decoder') as scope:
+        with tf.variable_scope('decoder') as scope:
             lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(config['decoder_memory_dim'], state_is_tuple=True)
-            rnn_outputs, rnn_states = tf.nn.dynamic_rnn(lstm_fw_cell, tf.expand_dims(fc_out, -1), dtype=tf.float32, scope='shared/decoder/rnn')
-            out = tf.contrib.layers.fully_connected(rnn_outputs, self.vocab_size, scope='shared/decoder/fcl')
+            rnn_outputs, rnn_states = tf.nn.dynamic_rnn(lstm_fw_cell, tf.expand_dims(fc_out, -1), dtype=tf.float32, scope='rnn')
+            out = tf.contrib.layers.fully_connected(rnn_outputs, self.vocab_size, scope='fcl')
         return out
 
     @lazy_property
     def loss(self):
         assert self.labels is not None
         assert self.prediction is not None
-        with tf.name_scope('loss') as scope:
+        with tf.variable_scope('loss') as scope:
             out = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.prediction, labels=self.labels))
+            tf.add_to_collection(tf.GraphKeys.LOSSES, out)
         return out
 
     @lazy_property
     def accuracy(self):
         assert self.labels is not None
         assert self.prediction is not None
-        with tf.name_scope('accuracy') as scope:
+        with tf.variable_scope('accuracy') as scope:
             int_predictions = tf.argmax(self.prediction, axis=2)
             out = tf.reduce_mean(tf.cast(tf.equal(self.labels, int_predictions), tf.float32))
         return out
 
     @staticmethod
     def build_convolution_layer(input_feed, shape, k, scope_name, dropout=config['dropout_prob'], activation=tf.nn.relu):
-        with tf.name_scope(scope_name) as scope:
-            weights = tf.Variable(tf.random_normal(shape, stddev=0.1))
-            bias = tf.Variable(tf.zeros([shape[3]]))
+        with tf.variable_scope(scope_name) as scope:
+            weights = tf.get_variable('weights', shape, initializer=tf.random_normal_initializer())
+            bias = tf.get_variable('bias', shape[3], initializer=tf.constant_initializer(0))
             conv = tf.nn.bias_add(tf.nn.conv2d(input_feed, weights, strides=[1, 1, 1, 1], padding='SAME'), bias)
             conv = activation(conv)
             pool = tf.nn.max_pool(conv, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')
