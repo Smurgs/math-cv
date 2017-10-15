@@ -12,7 +12,7 @@ from mathcv.config import config
 #     os.mkdir(id)
 #     save_path = saver.save(sess, id + '/model')
 
-def average_gradients(grads):
+def _average_gradients(grads):
     average_grads = []
     for grad_and_vars in zip(*grads):
         grads = []
@@ -27,31 +27,43 @@ def average_gradients(grads):
     return average_grads
 
 
+def _build_device_list():
+    device_list = []
+    if config['num_gpus'] == 0:
+        device_list.append('/cpu:0')
+    elif config['num_gpus'] > 0:
+        device_list += ['/gpu:%d' % x for x in range(config['num_gpus'])]
+    else:
+        raise ValueError('num_gpus is not defined or is not valid')
+    return device_list
+
+
 def train():
+    dev_list = _build_device_list()
+    num_clones = len(dev_list)
+
     print ('Loading data')
     data_loader = mathcv.data_handler.DataLoader()
 
     print ('Building model')
-    image_input = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1], name='image_input')
-    label_input = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
-    image_input2 = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1], name='image_input')
-    label_input2 = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
+    model_inputs = []
+    grads = []
+    optimizer = tf.train.AdadeltaOptimizer(config['learning_rate'])
+    for x in range(num_clones):
+        image_input = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1], name='image_input')
+        label_input = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
+        model_inputs.append((image_input, label_input))
 
-    opt = tf.train.AdadeltaOptimizer(config['learning_rate'])
-    with tf.name_scope('model1') as scope:
-        with tf.device('/gpu:0'):
-            model = mathcv.model.Model(image_input, label_input, data_loader.get_vocab_size())
-            grad1 = opt.compute_gradients(model.loss)
-    with tf.name_scope('model2') as scope:
-        with tf.device('/gpu:1'):
-            with tf.variable_scope(tf.get_variable_scope(), reuse=True):
-                model2 = mathcv.model.Model(image_input2, label_input2, data_loader.get_vocab_size())
-                grad2 = opt.compute_gradients(model2.loss)
+        with tf.name_scope('model%d' % x) as scope:
+            with tf.device(dev_list[x]):
+                with tf.variable_scope(tf.get_variable_scope(), reuse=True if x > 0 else None):
+                    model = mathcv.model.Model(image_input, label_input, data_loader.get_vocab_size())
+                    grad = optimizer.compute_gradients(model.loss)
+                    grads.append(grad)
+
     with tf.device('/cpu:0'):
-        grads = average_gradients([grad1, grad2])
-        apply_grad_op = opt.apply_gradients(grads)
-
-    print (tf.get_collection(tf.GraphKeys.LOSSES))
+        avg_grad = _average_gradients(grads)
+        apply_grad_op = optimizer.apply_gradients(avg_grad)
 
     print ('Starting session')
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
@@ -62,11 +74,14 @@ def train():
         for epoch in range(config['epochs']):
             print ("Starting epoch " + str(epoch + 1))
             epoch_start_time = time.time()
-            train_batches = data_loader.get_train_batches()[:4]
-            for x in range(0, len(train_batches), 2):
-                images, labels = train_batches[x]
-                images2, labels2 = train_batches[x+1]
-                _, acc = sess.run([apply_grad_op, model.accuracy], feed_dict={image_input: images, label_input: labels, image_input2:images2, label_input2:labels2})
+            train_batches = data_loader.get_train_batches()
+            for x in range(0, (len(train_batches)/num_clones)*num_clones, num_clones):
+                feeder = {}
+                for i in range(num_clones):
+                    images, labels = train_batches[x+i]
+                    feeder[model_inputs[i][0]] = images
+                    feeder[model_inputs[i][1]] = labels
+                _, acc = sess.run([apply_grad_op, model.accuracy], feed_dict=feeder)
                 print ('Batch accuracy: ' + str(acc))
             print ("Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60))
 

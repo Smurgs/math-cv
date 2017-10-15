@@ -26,6 +26,7 @@ config = {
     'label_length': 202,
     'num_thread_preprocess': 10,
 
+    'num_gpus': 0,
     'batch_size': 2,
     'epochs': 1,
     'train_limit': 10,
