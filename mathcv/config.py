@@ -26,10 +26,10 @@ config = {
     'label_length': 202,
     'num_thread_preprocess': 10,
 
-    'batch_size': 2,
+    'batch_size': 30,
     'epochs': 1,
-    'train_limit': 10,
-    'val_limit': 10,
+    'train_limit': 150,
+    'val_limit': 50,
     'test_limit': 10,
     'dropout_prob': 0.75,
     'decoder_memory_dim': 512,

@@ -18,13 +18,18 @@ def lazy_property(function):
 
 
 class Model:
+    model_count = 0
+
     def __init__(self, images, labels, vocab_size):
+        Model.model_count += 1
         self.images = images
         self.labels = labels
         self.vocab_size = vocab_size
-        self.prediction
-        self.loss
-        self.accuracy
+        with tf.name_scope('model%d' % Model.model_count) as scope:
+            self.prediction
+            self.loss
+            self.accuracy
+            tf.get_variable_scope().reuse_variables()
 
     @lazy_property
     def prediction(self):
@@ -37,13 +42,13 @@ class Model:
 
         # Encoder - Fully connected layer
         with tf.name_scope('encoder') as scope:
-            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), config['label_length'])
+            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), config['label_length'], scope='shared/encoder/fcl')
 
         # Decoder
         with tf.name_scope('decoder') as scope:
             lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(config['decoder_memory_dim'], state_is_tuple=True)
-            rnn_outputs, rnn_states = tf.nn.dynamic_rnn(lstm_fw_cell, tf.expand_dims(fc_out, -1), dtype=tf.float32)
-            out = tf.contrib.layers.fully_connected(rnn_outputs, self.vocab_size)
+            rnn_outputs, rnn_states = tf.nn.dynamic_rnn(lstm_fw_cell, tf.expand_dims(fc_out, -1), dtype=tf.float32, scope='shared/decoder/rnn')
+            out = tf.contrib.layers.fully_connected(rnn_outputs, self.vocab_size, scope='shared/decoder/fcl')
         return out
 
     @lazy_property
