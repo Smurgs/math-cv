@@ -75,7 +75,7 @@ def train():
             print ("Starting epoch " + str(epoch + 1))
             epoch_start_time = time.time()
             train_batches = data_loader.get_train_batches()
-            for x in range(0, (len(train_batches)/num_clones)*num_clones, num_clones):
+            for x in range(0, int(len(train_batches)/num_clones)*num_clones, num_clones):
                 feeder = {}
                 for i in range(num_clones):
                     images, labels = train_batches[x+i]
