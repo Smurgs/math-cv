@@ -17,6 +17,8 @@ config = {
     'formula_path': os.path.join(root_dir, 'mathcv/target/preprocessed_dataset/formulas.lst'),
 
     'mapper_path': os.path.join(root_dir, 'mathcv/target/preprocessed_dataset/mapper.txt'),
+    'saver_path': os.path.join(root_dir, 'mathcv/target/saved_model'),
+    'summary_path': os.path.join(root_dir, 'mathcv/target/model_summaries'),
 
     'image_height': 125,
     'image_width': 625,
@@ -27,7 +29,7 @@ config = {
     'num_thread_preprocess': 10,
 
     'num_gpus': 0,
-    'batch_size': 2,
+    'batch_size': 1,
     'epochs': 1,
     'train_limit': 10,
     'val_limit': 10,

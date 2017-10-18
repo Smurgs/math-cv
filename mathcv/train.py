@@ -1,3 +1,4 @@
+import os
 import time
 import tensorflow as tf
 
@@ -6,11 +7,13 @@ import mathcv.data_handler
 from mathcv.config import config
 
 
-#     print 'Saving model'
-#     saver = tf.train.Saver()
-#     id = 'model-' + time.strftime("%d-%m-%Y--%H-%M")
-#     os.mkdir(id)
-#     save_path = saver.save(sess, id + '/model')
+def _save_graph():
+    if not os.path.exists(config['saver_path']):
+        os.makedirs(config['saver_path'])
+    #id = 'model-' + time.strftime("%d-%m-%Y--%H-%M")
+    saver = tf.train.Saver()
+    saver.save(tf.get_default_session(), config['saver_path'])
+
 
 def _average_gradients(grads):
     with tf.name_scope('average_gradients') as scope:
@@ -50,6 +53,7 @@ def train():
     model_inputs = []
     grads = []
     optimizer = tf.train.AdadeltaOptimizer(config['learning_rate'])
+    global_step = tf.train.create_global_step()
     for x in range(num_clones):
         image_input = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1], name='image_input')
         label_input = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
@@ -64,14 +68,14 @@ def train():
 
     with tf.device('/cpu:0'):
         avg_grad = _average_gradients(grads)
-        apply_grad_op = optimizer.apply_gradients(avg_grad)
+        apply_grad_op = optimizer.apply_gradients(avg_grad, global_step=global_step)
 
     merged_summaries = tf.summary.merge_all()
 
     print ('Starting session')
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         sess.run(tf.global_variables_initializer())
-        summary_writer = tf.summary.FileWriter("mathcv/target/model_summaries", sess.graph)
+        summary_writer = tf.summary.FileWriter(config['summary_path'], sess.graph)
 
         print ('Starting training')
         for epoch in range(config['epochs']):
@@ -88,6 +92,7 @@ def train():
                 summary_writer.add_summary(summary, x)
                 print ('Batch accuracy: ' + str(acc))
             print ("Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60))
+            _save_graph()
 
         print ('Running on validation set')
         accs = []
