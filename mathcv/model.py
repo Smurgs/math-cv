@@ -55,6 +55,7 @@ class Model:
         assert self.prediction is not None
         with tf.variable_scope('loss') as scope:
             out = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.prediction, labels=self.labels))
+            tf.summary.scalar('clone_loss', out)
             tf.add_to_collection(tf.GraphKeys.LOSSES, out)
         return out
 
@@ -65,6 +66,7 @@ class Model:
         with tf.variable_scope('accuracy') as scope:
             int_predictions = tf.argmax(self.prediction, axis=2)
             out = tf.reduce_mean(tf.cast(tf.equal(self.labels, int_predictions), tf.float32))
+            tf.summary.scalar('clone_accuracy', out)
         return out
 
     @staticmethod

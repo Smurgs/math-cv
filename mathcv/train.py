@@ -13,17 +13,18 @@ from mathcv.config import config
 #     save_path = saver.save(sess, id + '/model')
 
 def _average_gradients(grads):
-    average_grads = []
-    for grad_and_vars in zip(*grads):
-        grads = []
-        for g, _ in grad_and_vars:
-            expanded_g = tf.expand_dims(g, 0)
-            grads.append(expanded_g)
-        grad = tf.concat(axis=0, values=grads)
-        grad = tf.reduce_mean(grad, 0)
-        v = grad_and_vars[0][1]
-        grad_and_var = (grad, v)
-        average_grads.append(grad_and_var)
+    with tf.name_scope('average_gradients') as scope:
+        average_grads = []
+        for grad_and_vars in zip(*grads):
+            grads = []
+            for g, _ in grad_and_vars:
+                expanded_g = tf.expand_dims(g, 0)
+                grads.append(expanded_g)
+            grad = tf.concat(axis=0, values=grads)
+            grad = tf.reduce_mean(grad, 0)
+            v = grad_and_vars[0][1]
+            grad_and_var = (grad, v)
+            average_grads.append(grad_and_var)
     return average_grads
 
 
@@ -65,10 +66,12 @@ def train():
         avg_grad = _average_gradients(grads)
         apply_grad_op = optimizer.apply_gradients(avg_grad)
 
+    merged_summaries = tf.summary.merge_all()
+
     print ('Starting session')
     with tf.Session(config=tf.ConfigProto(allow_soft_placement=True)) as sess:
         sess.run(tf.global_variables_initializer())
-        tf.summary.FileWriter("mathcv/target/model_summaries", sess.graph)
+        summary_writer = tf.summary.FileWriter("mathcv/target/model_summaries", sess.graph)
 
         print ('Starting training')
         for epoch in range(config['epochs']):
@@ -81,7 +84,8 @@ def train():
                     images, labels = train_batches[x+i]
                     feeder[model_inputs[i][0]] = images
                     feeder[model_inputs[i][1]] = labels
-                _, acc = sess.run([apply_grad_op, model.accuracy], feed_dict=feeder)
+                _, acc, summary = sess.run([apply_grad_op, model.accuracy, merged_summaries], feed_dict=feeder)
+                summary_writer.add_summary(summary, x)
                 print ('Batch accuracy: ' + str(acc))
             print ("Time for epoch:%f mins" % ((time.time() - epoch_start_time) / 60))
 
