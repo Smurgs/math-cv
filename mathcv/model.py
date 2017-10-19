@@ -21,6 +21,7 @@ class Model:
     model_count = 0
 
     def __init__(self, images, labels, vocab_size):
+        self.id = Model.model_count
         Model.model_count += 1
         self.images = images
         self.labels = labels
@@ -65,7 +66,7 @@ class Model:
         assert self.prediction is not None
         with tf.variable_scope('accuracy') as scope:
             int_predictions = tf.argmax(self.prediction, axis=2)
-            out = tf.reduce_mean(tf.cast(tf.equal(self.labels, int_predictions), tf.float32))
+            out = tf.reduce_mean(tf.cast(tf.equal(self.labels, int_predictions), tf.float32), name='accuracy')
             tf.summary.scalar('clone_accuracy', out)
         return out
 

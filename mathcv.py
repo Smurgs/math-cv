@@ -50,7 +50,8 @@ def download_dataset():
 
 
 def train_model():
-    mathcv.train.train()
+    trainer = mathcv.train.Trainer()
+    trainer.train()
 
 
 def infer():
