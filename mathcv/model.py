@@ -41,7 +41,7 @@ class Model:
 
         # Encoder - Fully connected layer
         with tf.variable_scope('encoder') as scope:
-            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), config['label_length'], scope='fcl')
+            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), 2048, scope='fcl')
 
         # Decoder
         with tf.variable_scope('decoder') as scope:
