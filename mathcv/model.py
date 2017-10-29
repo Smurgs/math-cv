@@ -18,60 +18,125 @@ def lazy_property(function):
 
 
 class Model:
-    model_count = 0
 
-    def __init__(self, images, labels, vocab_size):
-        self.id = Model.model_count
-        Model.model_count += 1
-        self.images = images
-        self.labels = labels
+    TRAIN_ACCURACY_COLLECTION = "train_accuracy_collection"
+    INFERENCE_ACCURACY_COLLECTION = "inference_accuracy_collection"
+    IMG_PLACEHOLDER_COLLECTION = "img_placeholder_collection"
+    INPUT_PLACEHOLDER_COLLECTION = "input_placeholder_collection"
+    TARGET_PLACEHOLDER_COLLECTION = "target_placeholder_collection"
+
+    def __init__(self, vocab_size):
+        # Vocabulary size
         self.vocab_size = vocab_size
-        self.prediction
+
+        # Images placeholder
+        self.images = tf.placeholder(tf.float32, [None, config['image_height'], config['image_width'], 1], name='image_input')
+        tf.add_to_collection(Model.IMG_PLACEHOLDER_COLLECTION, self.images)
+
+        # Training input label placeholder
+        self.label_inputs = tf.placeholder(tf.int64, [None, config['label_length']], name='label_input')
+        tf.add_to_collection(Model.INPUT_PLACEHOLDER_COLLECTION, self.label_inputs)
+
+        # Target label placeholder
+        self.label_targets = tf.placeholder(tf.int64, [None, config['label_length']], name='label_target')
+        tf.add_to_collection(Model.TARGET_PLACEHOLDER_COLLECTION, self.label_targets)
+
+        # Model components
+        self._encoder
+        self.decoder
         self.loss
         self.accuracy
 
     @lazy_property
-    def prediction(self):
-        # Convolution layers
-        conv1 = self.build_convolution_layer(self.images, [5, 5, 1, 32], 1, 'conv_layer_1')
-        conv2 = self.build_convolution_layer(conv1, [5, 5, 32, 64], 2, 'conv_layer_2')
-        conv3 = self.build_convolution_layer(conv2, [5, 5, 64, 128], 1, 'conv_layer_3')
-        conv4 = self.build_convolution_layer(conv3, [5, 5, 128, 256], 2, 'conv_layer_4')
-        conv5 = self.build_convolution_layer(conv4, [5, 5, 256, 384], 1, 'conv_layer_5')
-
-        # Encoder - Fully connected layer
+    def _encoder(self):
         with tf.variable_scope('encoder') as scope:
-            fc_out = tf.contrib.layers.fully_connected(tf.contrib.layers.flatten(conv5), 2048, scope='fcl')
+            conv1 = self._build_convolution_layer(self.images, [5, 5, 1, 32], 1, 'conv_layer_1')
+            conv2 = self._build_convolution_layer(conv1, [5, 5, 32, 64], 2, 'conv_layer_2')
+            conv3 = self._build_convolution_layer(conv2, [5, 5, 64, 128], 1, 'conv_layer_3')
+            conv4 = self._build_convolution_layer(conv3, [5, 5, 128, 256], 2, 'conv_layer_4')
+            conv5 = self._build_convolution_layer(conv4, [5, 5, 256, 384], 1, 'conv_layer_5')
+            fc_out = tf.contrib.layers.fully_connected(inputs=tf.contrib.layers.flatten(conv5),
+                                                       num_outputs=config['embedding_size'],
+                                                       activation_fn=None,
+                                                       scope='fcl')
+        return fc_out
 
-        # Decoder
+    @lazy_property
+    def decoder(self):
         with tf.variable_scope('decoder') as scope:
-            lstm_fw_cell = tf.contrib.rnn.BasicLSTMCell(config['decoder_memory_dim'], state_is_tuple=True)
-            rnn_outputs, rnn_states = tf.nn.dynamic_rnn(lstm_fw_cell, tf.expand_dims(fc_out, -1), dtype=tf.float32, scope='rnn')
-            out = tf.contrib.layers.fully_connected(rnn_outputs, self.vocab_size, scope='fcl')
-        return out
+            # Prepare lstm initial state with encoder data
+            lstm_cell = tf.contrib.rnn.BasicLSTMCell(config['decoder_memory_dim'], state_is_tuple=True)
+            zero_state = lstm_cell.zero_state(batch_size=config['batch_size'], dtype=tf.float32)
+            _, initial_state = lstm_cell(self._encoder, zero_state)
+
+            # Setup embedding map
+            embedding_map = tf.get_variable(name='map', shape=[self.vocab_size, config['embedding_size']])
+
+            # Training decoder
+            train_state_tuple = initial_state
+            inp_embeddings = tf.nn.embedding_lookup(embedding_map, self.label_inputs)
+            list_inputs = tf.split(inp_embeddings, config['label_length'], axis=1)
+            training_outputs = []
+            with tf.variable_scope('loop') as scope:
+                for i, inp in enumerate(list_inputs):
+                    if i > 0:
+                        scope.reuse_variables()
+                    output, train_state_tuple = lstm_cell(tf.squeeze(inp, axis=[1]), train_state_tuple)
+                    training_outputs.append(output)
+
+            training_outputs = tf.concat(training_outputs, axis=0)
+            logits = tf.contrib.layers.fully_connected(inputs=training_outputs,
+                                                       num_outputs=self.vocab_size,
+                                                       activation_fn=None,
+                                                       scope='fcl')
+
+            # Validation decoder
+            val_state_tuple = initial_state
+            first_input = tf.slice(self.label_inputs, [0, 0], [-1, 1])
+            inference_inp = tf.squeeze(tf.nn.embedding_lookup(embedding_map, first_input), axis=[1])
+            inference_outputs = []
+            with tf.variable_scope('loop', reuse=True) as scope:
+                for _ in range(config['label_length']):
+                    inference_output, val_state_tuple = lstm_cell(inference_inp, val_state_tuple)
+                    inference_outputs.append(inference_output)
+                    inference_inp = inference_output
+
+            inference_outputs = tf.concat(inference_outputs, axis=0)
+            inference_logits = tf.contrib.layers.fully_connected(inputs=inference_outputs,
+                                                           num_outputs=self.vocab_size,
+                                                           activation_fn=None,
+                                                           scope='fcl',
+                                                           reuse=True)
+
+        with tf.variable_scope('inference_accuracy') as scope:
+            inferences_softmax = tf.nn.softmax(inference_logits, name="inference_softmax")
+            inference_int_predictions = tf.argmax(inferences_softmax, axis=1)
+            targets = tf.reshape(self.label_targets, [-1])
+            inference_accuracy = tf.reduce_mean(tf.cast(tf.equal(targets, inference_int_predictions), tf.float32))
+            tf.add_to_collection(Model.INFERENCE_ACCURACY_COLLECTION, inference_accuracy)
+        return logits
 
     @lazy_property
     def loss(self):
-        assert self.labels is not None
-        assert self.prediction is not None
         with tf.variable_scope('loss') as scope:
-            out = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.prediction, labels=self.labels))
+            targets = tf.reshape(self.label_targets, [-1])
+            out = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.decoder, labels=targets))
             tf.summary.scalar('clone_loss', out)
             tf.add_to_collection(tf.GraphKeys.LOSSES, out)
         return out
 
     @lazy_property
     def accuracy(self):
-        assert self.labels is not None
-        assert self.prediction is not None
         with tf.variable_scope('accuracy') as scope:
-            int_predictions = tf.argmax(self.prediction, axis=2)
-            out = tf.reduce_mean(tf.cast(tf.equal(self.labels, int_predictions), tf.float32), name='accuracy')
+            int_predictions = tf.argmax(self.decoder, axis=1)
+            targets = tf.reshape(self.label_targets, [-1])
+            out = tf.reduce_mean(tf.cast(tf.equal(targets, int_predictions), tf.float32), name='accuracy')
+            tf.add_to_collection(Model.TRAIN_ACCURACY_COLLECTION, out)
             tf.summary.scalar('clone_accuracy', out)
         return out
 
     @staticmethod
-    def build_convolution_layer(input_feed, shape, k, scope_name, dropout=config['dropout_prob'], activation=tf.nn.relu):
+    def _build_convolution_layer(input_feed, shape, k, scope_name, dropout=config['dropout_prob'], activation=tf.nn.relu):
         with tf.variable_scope(scope_name) as scope:
             weights = tf.get_variable('weights', shape, initializer=tf.random_normal_initializer())
             bias = tf.get_variable('bias', shape[3], initializer=tf.constant_initializer(0))

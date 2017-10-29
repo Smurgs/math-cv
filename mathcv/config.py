@@ -28,13 +28,15 @@ config = {
     'label_length': 202,
     'num_thread_preprocess': 10,
 
-    'num_gpus': 4,
-    'batch_size': 20,
+    'num_gpus': 0,
+    'batch_size': 1,
     'epochs': 1,
-    'train_limit': None,
-    'val_limit': None,
+    'train_limit': 3,
+    'val_limit': 3,
     'test_limit': 10,
-    'dropout_prob': 0.75,
+    'dropout_prob': 1,
+    'embedding_size': 512,
+    'cell_output_size': 512,
     'decoder_memory_dim': 512,
-    'learning_rate': 0.1
+    'learning_rate': 0.01
 }
