@@ -76,15 +76,27 @@ class Model:
             train_state_tuple = initial_state
             inp_embeddings = tf.nn.embedding_lookup(embedding_map, self.label_inputs)
             list_inputs = tf.split(inp_embeddings, config['label_length'], axis=1)
-            training_outputs = []
-            with tf.variable_scope('loop') as scope:
-                for i, inp in enumerate(list_inputs):
-                    if i > 0:
-                        scope.reuse_variables()
-                    output, train_state_tuple = lstm_cell(tf.squeeze(inp, axis=[1]), train_state_tuple)
-                    training_outputs.append(output)
+            output_ta = tf.TensorArray(size=config['label_length'], dtype=tf.float32)
+            input_ta = tf.TensorArray(size=config['label_length'], dtype=tf.float32)
+            input_ta = input_ta.unstack(list_inputs)
 
-            training_outputs = tf.concat(training_outputs, axis=0)
+            def train_time_step(time_t, output_ta_t, state):
+                in_value = input_ta.read(time_t)
+                out_value, out_state = lstm_cell(tf.squeeze(in_value, axis=[1]), state)
+                output_ta_t = output_ta_t.write(time_t, out_value)
+                return time_t+1, output_ta_t, out_state
+
+            time = tf.constant(0, dtype='int32')
+            time_steps = config['label_length']
+            _, output_final_ta, final_state = tf.while_loop(
+                cond=lambda time, *_: time < time_steps,
+                body=train_time_step,
+                loop_vars=(time, output_ta, train_state_tuple),
+                parallel_iterations=config['batch_size'],
+                swap_memory=False)
+
+            training_outputs = output_final_ta.stack()
+            training_outputs = tf.squeeze(training_outputs, axis=[1])
             logits = tf.contrib.layers.fully_connected(inputs=training_outputs,
                                                        num_outputs=self.vocab_size,
                                                        activation_fn=None,
@@ -94,25 +106,40 @@ class Model:
             val_state_tuple = initial_state
             first_input = tf.slice(self.label_inputs, [0, 0], [-1, 1])
             inference_inp = tf.squeeze(tf.nn.embedding_lookup(embedding_map, first_input), axis=[1])
-            inference_outputs = []
-            with tf.variable_scope('loop', reuse=True) as scope:
-                for _ in range(config['label_length']):
-                    inference_output, val_state_tuple = lstm_cell(inference_inp, val_state_tuple)
-                    inference_outputs.append(inference_output)
-                    inference_inp = inference_output
+            output_ta = tf.TensorArray(size=config['label_length'], dtype=tf.int64)
+            input_ta = tf.TensorArray(size=config['label_length']+1, dtype=tf.float32)
+            input_ta = input_ta.write(0, inference_inp)
 
-            inference_outputs = tf.concat(inference_outputs, axis=0)
-            inference_logits = tf.contrib.layers.fully_connected(inputs=inference_outputs,
-                                                           num_outputs=self.vocab_size,
-                                                           activation_fn=None,
-                                                           scope='fcl',
-                                                           reuse=True)
+            def inference_time_step(time_t, input_ta_t, output_ta_t, state):
+                in_value = input_ta_t.read(time_t)
+                out_value, out_state = lstm_cell(in_value, state)
+                inference_logits = tf.contrib.layers.fully_connected(inputs=out_value,
+                                                                     num_outputs=self.vocab_size,
+                                                                     activation_fn=None,
+                                                                     scope='fcl',
+                                                                     reuse=True)
+                inferences_softmax = tf.nn.softmax(inference_logits, name="inference_softmax")
+                inference_int_prediction = tf.argmax(inferences_softmax, axis=1)
+
+                output_ta_t = output_ta_t.write(time_t, inference_int_prediction)
+                input_ta_t = input_ta_t.write(time_t+1, tf.nn.embedding_lookup(embedding_map, inference_int_prediction))
+                return time_t+1, input_ta_t, output_ta_t, out_state
+
+            time = tf.constant(0, dtype='int32')
+            time_steps = config['label_length']
+            _, _, output_final_ta, final_state = tf.while_loop(
+                cond=lambda time, *_: time < time_steps,
+                body=inference_time_step,
+                loop_vars=(time, input_ta, output_ta, val_state_tuple),
+                parallel_iterations=config['batch_size'],
+                swap_memory=False)
+
+            inference_outputs = output_final_ta.stack()
+            inference_outputs = tf.squeeze(inference_outputs, axis=[1])
 
         with tf.variable_scope('inference_accuracy') as scope:
-            inferences_softmax = tf.nn.softmax(inference_logits, name="inference_softmax")
-            inference_int_predictions = tf.argmax(inferences_softmax, axis=1)
             targets = tf.reshape(self.label_targets, [-1])
-            inference_accuracy = tf.reduce_mean(tf.cast(tf.equal(targets, inference_int_predictions), tf.float32))
+            inference_accuracy = tf.reduce_mean(tf.cast(tf.equal(targets, inference_outputs), tf.float32))
             tf.add_to_collection(Model.INFERENCE_ACCURACY_COLLECTION, inference_accuracy)
         return logits
 
