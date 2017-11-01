@@ -29,7 +29,7 @@ config = {
     'num_thread_preprocess': 10,
 
     'num_gpus': 0,
-    'batch_size': 1,
+    'batch_size': 2,
     'epochs': 1,
     'train_limit': 3,
     'val_limit': 3,

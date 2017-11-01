@@ -96,7 +96,10 @@ class Model:
                 swap_memory=False)
 
             training_outputs = output_final_ta.stack()
-            training_outputs = tf.squeeze(training_outputs, axis=[1])
+            training_outputs = tf.transpose(training_outputs, perm=[1, 0, 2])
+            training_outputs = tf.reshape(training_outputs,
+                                          shape=[-1, config['decoder_memory_dim']])
+
             logits = tf.contrib.layers.fully_connected(inputs=training_outputs,
                                                        num_outputs=self.vocab_size,
                                                        activation_fn=None,
@@ -135,7 +138,8 @@ class Model:
                 swap_memory=False)
 
             inference_outputs = output_final_ta.stack()
-            inference_outputs = tf.squeeze(inference_outputs, axis=[1])
+            inference_outputs = tf.transpose(inference_outputs)
+            inference_outputs = tf.reshape(inference_outputs, [-1])
 
         with tf.variable_scope('inference_accuracy') as scope:
             targets = tf.reshape(self.label_targets, [-1])
