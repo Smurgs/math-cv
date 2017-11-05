@@ -29,14 +29,14 @@ config = {
     'num_thread_preprocess': 10,
 
     'num_gpus': 0,
-    'batch_size': 2,
+    'batch_size': 1,
     'epochs': 1,
-    'train_limit': 3,
-    'val_limit': 3,
+    'train_limit': 2,
+    'val_limit': 2,
     'test_limit': 10,
     'dropout_prob': 1,
     'embedding_size': 512,
-    'cell_output_size': 512,
-    'decoder_memory_dim': 512,
+    'cell_output_size': 202,
+    'decoder_memory_dim': 202,
     'learning_rate': 0.01
 }

@@ -20,7 +20,9 @@ def lazy_property(function):
 class Model:
 
     TRAIN_ACCURACY_COLLECTION = "train_accuracy_collection"
+    CLONE_TRAIN_ACCURACY_COLLECTION = "clone_train_accuracy_collection"
     INFERENCE_ACCURACY_COLLECTION = "inference_accuracy_collection"
+    CLONE_INFERENCE_ACCURACY_COLLECTION = "clone_inference_accuracy_collection"
     IMG_PLACEHOLDER_COLLECTION = "img_placeholder_collection"
     INPUT_PLACEHOLDER_COLLECTION = "input_placeholder_collection"
     TARGET_PLACEHOLDER_COLLECTION = "target_placeholder_collection"
@@ -55,10 +57,14 @@ class Model:
             conv3 = self._build_convolution_layer(conv2, [5, 5, 64, 128], 1, 'conv_layer_3')
             conv4 = self._build_convolution_layer(conv3, [5, 5, 128, 256], 2, 'conv_layer_4')
             conv5 = self._build_convolution_layer(conv4, [5, 5, 256, 384], 1, 'conv_layer_5')
+            flattened = tf.contrib.layers.flatten(conv5)
+            with tf.device('/cpu:0'):
+                tf.get_variable('fcl/weights', [flattened.get_shape()[1], config['embedding_size']], initializer=tf.random_normal_initializer())
+                tf.get_variable('fcl/biases', config['embedding_size'], initializer=tf.constant_initializer(0))
             fc_out = tf.contrib.layers.fully_connected(inputs=tf.contrib.layers.flatten(conv5),
                                                        num_outputs=config['embedding_size'],
                                                        activation_fn=None,
-                                                       scope='fcl')
+                                                       scope='fcl', reuse=True)
         return fc_out
 
     @lazy_property
@@ -70,7 +76,8 @@ class Model:
             _, initial_state = lstm_cell(self._encoder, zero_state)
 
             # Setup embedding map
-            embedding_map = tf.get_variable(name='map', shape=[self.vocab_size, config['embedding_size']])
+            with tf.device('/cpu:0'):
+                embedding_map = tf.get_variable(name='map', shape=[self.vocab_size, config['embedding_size']])
 
             # Training decoder
             train_state_tuple = initial_state
@@ -99,11 +106,13 @@ class Model:
             training_outputs = tf.transpose(training_outputs, perm=[1, 0, 2])
             training_outputs = tf.reshape(training_outputs,
                                           shape=[-1, config['decoder_memory_dim']])
-
+            with tf.device('/cpu:0'):
+                tf.get_variable('fcl/weights', [config['decoder_memory_dim'], self.vocab_size], initializer=tf.random_normal_initializer())
+                tf.get_variable('fcl/biases', self.vocab_size, initializer=tf.constant_initializer(0))
             logits = tf.contrib.layers.fully_connected(inputs=training_outputs,
                                                        num_outputs=self.vocab_size,
                                                        activation_fn=None,
-                                                       scope='fcl')
+                                                       scope='fcl', reuse=True)
 
             # Validation decoder
             val_state_tuple = initial_state
@@ -144,7 +153,7 @@ class Model:
         with tf.variable_scope('inference_accuracy') as scope:
             targets = tf.reshape(self.label_targets, [-1])
             inference_accuracy = tf.reduce_mean(tf.cast(tf.equal(targets, inference_outputs), tf.float32))
-            tf.add_to_collection(Model.INFERENCE_ACCURACY_COLLECTION, inference_accuracy)
+            tf.add_to_collection(Model.CLONE_INFERENCE_ACCURACY_COLLECTION, inference_accuracy)
         return logits
 
     @lazy_property
@@ -162,15 +171,44 @@ class Model:
             int_predictions = tf.argmax(self.decoder, axis=1)
             targets = tf.reshape(self.label_targets, [-1])
             out = tf.reduce_mean(tf.cast(tf.equal(targets, int_predictions), tf.float32), name='accuracy')
-            tf.add_to_collection(Model.TRAIN_ACCURACY_COLLECTION, out)
+            tf.add_to_collection(Model.CLONE_TRAIN_ACCURACY_COLLECTION, out)
             tf.summary.scalar('clone_accuracy', out)
         return out
 
     @staticmethod
+    def average_batch_accuracy():
+        with tf.variable_scope('avg_batch_acc'):
+            with tf.device('/cpu:0'):
+                accs = tf.get_collection(Model.CLONE_TRAIN_ACCURACY_COLLECTION)
+                expanded_accs = []
+                for acc in accs:
+                    expanded_acc = tf.expand_dims(acc, 0)
+                    expanded_accs.append(expanded_acc)
+
+                acc = tf.concat(axis=0, values=expanded_accs)
+                acc = tf.reduce_mean(acc, 0)
+                tf.add_to_collection(Model.TRAIN_ACCURACY_COLLECTION, acc)
+
+    @staticmethod
+    def average_inference_batch_accuracy():
+        with tf.variable_scope('avg_inference_batch_acc'):
+            with tf.device('/cpu:0'):
+                accs = tf.get_collection(Model.CLONE_INFERENCE_ACCURACY_COLLECTION)
+                expanded_accs = []
+                for acc in accs:
+                    expanded_acc = tf.expand_dims(acc, 0)
+                    expanded_accs.append(expanded_acc)
+
+                acc = tf.concat(axis=0, values=expanded_accs)
+                acc = tf.reduce_mean(acc, 0)
+                tf.add_to_collection(Model.INFERENCE_ACCURACY_COLLECTION, acc)
+
+    @staticmethod
     def _build_convolution_layer(input_feed, shape, k, scope_name, dropout=config['dropout_prob'], activation=tf.nn.relu):
         with tf.variable_scope(scope_name) as scope:
-            weights = tf.get_variable('weights', shape, initializer=tf.random_normal_initializer())
-            bias = tf.get_variable('bias', shape[3], initializer=tf.constant_initializer(0))
+            with tf.device('/cpu:0'):
+                weights = tf.get_variable('weights', shape, initializer=tf.random_normal_initializer())
+                bias = tf.get_variable('bias', shape[3], initializer=tf.constant_initializer(0))
             conv = tf.nn.bias_add(tf.nn.conv2d(input_feed, weights, strides=[1, 1, 1, 1], padding='SAME'), bias)
             conv = activation(conv)
             pool = tf.nn.max_pool(conv, ksize=[1, k, k, 1], strides=[1, k, k, 1], padding='SAME')

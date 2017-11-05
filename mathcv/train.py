@@ -19,7 +19,7 @@ class Trainer:
         if not os.path.exists(config['saver_path']):
             os.makedirs(config['saver_path'])
         saver = tf.train.Saver()
-        saver.save(tf.get_default_session(), config['saver_path'] + 'model')
+        saver.save(self._sess, config['saver_path'] + 'model')
 
     def _prepare_graph(self):
         if self._graph_created is False:
@@ -49,6 +49,9 @@ class Trainer:
         with tf.device('/cpu:0'):
             avg_grad = self._average_gradients(grads)
             optimizer.apply_gradients(avg_grad, global_step=global_step, name='apply_grad_op')
+
+        mathcv.model.Model.average_batch_accuracy()
+        mathcv.model.Model.average_inference_batch_accuracy()
 
     def _average_gradients(self, grads):
         with tf.name_scope('average_gradients') as scope:
@@ -91,15 +94,7 @@ class Trainer:
             accs = tf.get_collection(mathcv.model.Model.TRAIN_ACCURACY_COLLECTION)
         else:
             accs = tf.get_collection(mathcv.model.Model.INFERENCE_ACCURACY_COLLECTION)
-
-        expanded_accs = []
-        for acc in accs:
-            expanded_acc = tf.expand_dims(acc, 0)
-            expanded_accs.append(expanded_acc)
-
-        acc = tf.concat(axis=0, values=expanded_accs)
-        acc = tf.reduce_mean(acc, 0)
-        return acc
+        return accs[0]
 
     def train(self):
         self._prepare_graph()
